@@ -4,7 +4,7 @@ import edu.princeton.cs.algs4.RectHV;
 import org.junit.Before;
 import org.junit.Test;
 
-public class PointSETTests {
+public class PointSETTest {
     PointSET brute;
     @Before
     public void setup() {

@@ -58,9 +58,9 @@ public class PointSET {
     // all points that are inside the rectangle (or on the boundary) -> o(n)
     public Iterable<Point2D> range(RectHV rect) {
         final Set<Point2D> intersectingPoints = grid.stream()
-                .filter(sq -> rect.intersects(sq.rect))
-                .flatMap(sqRect -> sqRect.getPoints().stream())
-                .filter(sqRectPoint -> rect.contains(sqRectPoint))
+                .filter(smallSqGrid -> rect.intersects(smallSqGrid.rect))
+                .flatMap(intersectingSmallSqGrid -> intersectingSmallSqGrid.getPoints().stream())
+                .filter(smallSqGridPts -> rect.contains(smallSqGridPts))
                 .collect(Collectors.toSet());
 
         return intersectingPoints;
