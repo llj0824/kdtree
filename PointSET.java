@@ -3,17 +3,15 @@ import edu.princeton.cs.algs4.RectHV;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-// Corner cases.  Throw an IllegalArgumentException if any argument is null.
 public class PointSET {
     //Rule of thumb: √N-by-√N grid -> use rectangles
     private static final int GRID_DIMENSION = 10; // grid = 10 by 10
     private static final double SQUARE_GRID_SIZE = 1.0/GRID_DIMENSION; // total grid size = 1.
-    private final KdTreeVisualizer visualizer;
     private final List<RectWrapper> grid;
     private int count;
 
@@ -21,7 +19,6 @@ public class PointSET {
     public PointSET() {
         grid = initGrid();
         count = 0;
-        visualizer = new KdTreeVisualizer();
     }
 
     // is the set empty?
@@ -36,15 +33,19 @@ public class PointSET {
 
     // add the point to the set (if it is not already in the set) -> o(logn)
     public void insert(Point2D p) {
+        assertNotNull(p);
         final RectWrapper rect = findRect(p.x(), p.y());
-        rect.addPoint(p);
+        boolean isNewPointAdded = rect.addPoint(p);
 
         // increment count.
-        count++;
+        if (isNewPointAdded) {
+            count++;
+        }
     }
 
     // does the set contain point p? -> o(logn)
     public boolean contains(Point2D p) {
+        assertNotNull(p);
         final RectWrapper rect = findRect(p.x(), p.y());
         return rect.contains(p);
     }
@@ -57,17 +58,19 @@ public class PointSET {
 
     // all points that are inside the rectangle (or on the boundary) -> o(n)
     public Iterable<Point2D> range(RectHV rect) {
-        final Set<Point2D> intersectingPoints = grid.stream()
+        assertNotNull(rect);
+        final List<Point2D> intersectingPoints = grid.stream()
                 .filter(smallSqGrid -> rect.intersects(smallSqGrid.rect))
                 .flatMap(intersectingSmallSqGrid -> intersectingSmallSqGrid.getPoints().stream())
                 .filter(smallSqGridPts -> rect.contains(smallSqGridPts))
-                .collect(Collectors.toSet());
+                .collect(Collectors.toList());
 
         return intersectingPoints;
     }
 
     // a nearest neighbor in the set to point p; null if the set is empty -> o(n)
     public Point2D nearest(Point2D p) {
+        assertNotNull(p);
         final Comparator<Point2D> closestPointComparator = Comparator.comparingDouble(pt -> pt.distanceTo(p));
         return grid.stream()
                 .flatMap(sq -> sq.getPoints().stream())
@@ -106,21 +109,28 @@ public class PointSET {
         return arr2d;
     }
 
+    private void assertNotNull(Object o ) {
+        if (o == null) {
+            throw new IllegalArgumentException();
+        }
+    }
+
     private class RectWrapper {
         private RectHV rect;
         private Set<Point2D> points;
 
         public RectWrapper(final RectHV rect) {
             this.rect = rect;
-            this.points = new HashSet<>();
+            this.points = new TreeSet<>();
         }
 
         public boolean contains(final Point2D p) {
             return points.contains(p);
         }
 
-        public void addPoint(final Point2D p) {
-            points.add(p);
+        public boolean addPoint(final Point2D p) {
+            // returns true if point did not already exist in set.
+            return points.add(p);
         }
 
         public Set<Point2D> getPoints() {

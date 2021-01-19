@@ -13,22 +13,30 @@ public class KdTree {
     private static final double INF = 1;
     private static final double NEG_INF = 0;
     private int count;
-    KdNode root;
+    private KdNode root;
 
     public KdTree() {
         this.count = 0;
     }
 
     public void insert(Point2D p) {
-        dfsInsert(p, root);
-        count++;
+        assertNotNull(p);
+        final boolean isPointAdded = dfsInsert(p, root);
+        if (isPointAdded) {
+            count++;
+        }
     }
 
-    private void dfsInsert(Point2D newPoint, KdNode currentNode) {
+    // returns true, if node is inserted.
+    // returns false, if node is rejected (duplicate)
+    private boolean dfsInsert(Point2D newPoint, KdNode currentNode) {
         // special case: root node
         if (currentNode == null) {
             root = new KdNode(newPoint, null, DEFAULT_AXIS);
-            return;
+            return true;
+        } else if (newPoint.equals(currentNode.point)) {
+            // reject duplicate point.
+            return false;
         }
 
         final Axis childComparisonAxis = isHorizontalAxis(currentNode.axis) ? Axis.Vertical : Axis.Horizontal;
@@ -40,22 +48,23 @@ public class KdTree {
             if (currentNode.right == null) {
                 // empty right leaf -> insert here
                 currentNode.right = new KdNode(newPoint, currentNode, childComparisonAxis);
-                return;
+                return true;
             }
             // insert into right subtree
-            dfsInsert(newPoint, currentNode.right);
+            return dfsInsert(newPoint, currentNode.right);
         } else {
             if (currentNode.left == null) {
                 // empty left leaf -> insert here
                 currentNode.left = new KdNode(newPoint, currentNode, childComparisonAxis);
-                return;
+                return true;
             }
             // insert into left subtree
-            dfsInsert(newPoint, currentNode.left);
+            return dfsInsert(newPoint, currentNode.left);
         }
     }
 
     public boolean contains(Point2D p) {
+        assertNotNull(p);
         return dfsContains(p, root);
     }
 
@@ -93,12 +102,11 @@ public class KdTree {
     public void draw() {
         final Consumer<KdNode> op = (kdNode) -> {
             kdNode.draw();
-//            System.out.println(String.format("%s -> x:[%s,%s] y:[%s,%s]", kdNode.point, kdNode.xrange[0], kdNode.xrange[1], kdNode.yrange[0], kdNode.yrange[1]));
         };
         forEachKdNode(root, op);
     }
 
-    void forEachKdNode(KdNode node, Consumer<KdNode> function) {
+    private void forEachKdNode(KdNode node, Consumer<KdNode> function) {
         if (node == null) {
             return;
         } else {
@@ -112,6 +120,7 @@ public class KdTree {
     }
 
     public Iterable<Point2D> range(RectHV rect) {
+        assertNotNull(rect);
         // Range search. To find all points contained in a given query rectangle, start at the root and recursively search for points in both subtrees
         // using the following pruning rule: if the query rectangle does not intersect the rectangle corresponding to a node,
         // there is no need to explore that node (or its subtrees). A subtree is searched only if it might contain a point contained in the query rectangle.
@@ -148,6 +157,7 @@ public class KdTree {
     }
 
     public Point2D nearest(Point2D p) {
+        assertNotNull(p);
         // do not search subtree (rect), if it is further than closest point found so far
         // choice -> choose first the subtree on same side of spitting line
         final KdNode impossibleFarAwayNode = new KdNode(new Point2D(INF * 2.0, INF * 2), null, null);
@@ -191,11 +201,10 @@ public class KdTree {
         // is further than distance sameside closest point to query point. Don't bother searching.
         final double distanceToDividingLineSq = currNode.getRect().distanceSquaredTo(queryPoint);
         final double distanceToClosestPointSq = closestNode.point.distanceSquaredTo(queryPoint);
-        if (distanceToClosestPointSq > distanceToDividingLineSq) {
+        if (distanceToClosestPointSq >= distanceToDividingLineSq) {
             final KdNode otherSideSubtreeResult = dfsNearest(queryPoint, otherSideSubtree, closestNode);
             if (otherSideSubtreeResult != null &&
                     otherSideSubtreeResult.point.distanceSquaredTo(queryPoint) < closestNode.point.distanceSquaredTo(queryPoint)) {
-//                log("otherSide", closestNode, otherSideSubtreeResult, queryPoint);
                 closestNode = otherSideSubtreeResult;
             }
         }
@@ -225,7 +234,7 @@ public class KdTree {
     }
 
 
-    protected class KdNode {
+    private class KdNode {
         double[] xrange;
         double[] yrange;
         KdNode parent;
@@ -277,25 +286,26 @@ public class KdTree {
         }
 
         private void draw() {
-            StdDraw.setPenColor(isHorizontalAxis() ? Color.blue : Color.red);
-
-            if (isHorizontalAxis()) {
-                final double x0 = xrange[0];
-                final double x1 = xrange[1];
-                final double y = point.y();
-                StdDraw.line(x0, y, x1, y);
-            } else {
-                // vertical line
-                final double x0 = point.x();
-                final double y0 = yrange[0];
-                final double x1 = point.x();
-                final double y1 = yrange[1];
-                StdDraw.line(x0, y0, x1, y1);
-            }
-            StdDraw.setPenRadius(0.01D);
-            StdDraw.setPenColor(Color.black);
-            StdDraw.point(point.x(), point.y());
-            StdDraw.setPenRadius(); //reset to normal
+            // Comment out because cousera checkstyle is doesn't allow Color import lol.
+//            StdDraw.setPenColor(isHorizontalAxis() ? Color.blue : Color.red);
+//            if (isHorizontalAxis()) {
+//                final double x0 = xrange[0];
+//                final double x1 = xrange[1];
+//                final double y = point.y();
+//                StdDraw.line(x0, y, x1, y);
+//            } else {
+//                // vertical line
+//                final double x0 = point.x();
+//                final double y0 = yrange[0];
+//                final double x1 = point.x();
+//                final double y1 = yrange[1];
+//                StdDraw.line(x0, y0, x1, y1);
+//            }
+//            StdDraw.setPenRadius(0.01D);
+//            StdDraw.setPenColor(Color.black);
+//            StdDraw.point(point.x(), point.y());
+//            //reset to normal
+//            StdDraw.setPenRadius();
         }
 
         public RectHV getRect() {
@@ -307,5 +317,11 @@ public class KdTree {
     private enum Axis {
         Vertical,
         Horizontal
+    }
+
+    private void assertNotNull(Object o ) {
+        if (o == null) {
+            throw new IllegalArgumentException();
+        }
     }
 }
