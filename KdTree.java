@@ -3,7 +3,9 @@ import edu.princeton.cs.algs4.RectHV;
 import edu.princeton.cs.algs4.StdDraw;
 
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class KdTree {
@@ -29,14 +31,14 @@ public class KdTree {
             return;
         }
 
-        final Axis childComparisonAxis = isHorizontalAxis(currentNode.axis) ? Axis.Horizontal : Axis.Vertical;
-        final double currVal = isHorizontalAxis(currentNode.axis) ? currentNode.point.x() : currentNode.point.y();
-        final double childVal = isHorizontalAxis(currentNode.axis) ? newPoint.x() : newPoint.y();
+        final Axis childComparisonAxis = isHorizontalAxis(currentNode.axis) ? Axis.Vertical : Axis.Horizontal;
+        final double currVal = isHorizontalAxis(currentNode.axis) ? currentNode.point.y() : currentNode.point.x();
+        final double childVal = isHorizontalAxis(currentNode.axis) ? newPoint.y() : newPoint.x();
 
         // choices -> insert left, insert right
         if (childVal >= currVal) {
             if (currentNode.right == null) {
-                // insert right
+                // empty right leaf -> insert here
                 currentNode.right = new KdNode(newPoint, currentNode, childComparisonAxis);
                 return;
             }
@@ -44,7 +46,7 @@ public class KdTree {
             dfsInsert(newPoint, currentNode.right);
         } else {
             if (currentNode.left == null) {
-                // insert left
+                // empty left leaf -> insert here
                 currentNode.left = new KdNode(newPoint, currentNode, childComparisonAxis);
                 return;
             }
@@ -68,8 +70,8 @@ public class KdTree {
         }
 
         // check if out of range
-        final double nodeComparisonValue = isHorizontalAxis(node.axis) ? node.point.x() : node.point.y();
-        final double pointComparisonValue = isHorizontalAxis(node.axis) ? p.x() : p.y();
+        final double nodeComparisonValue = isHorizontalAxis(node.axis) ? node.point.y() : node.point.x();
+        final double pointComparisonValue = isHorizontalAxis(node.axis) ? p.y() : p.x();
         // choices -> search left subtree, search right subtree
         if (pointComparisonValue >= nodeComparisonValue) {
             // search right subtree.
@@ -91,7 +93,7 @@ public class KdTree {
     public void draw() {
         final Consumer<KdNode> op = (kdNode) -> {
             kdNode.draw();
-            System.out.println(String.format("%s -> x:[%s,%s] y:[%s,%s]", kdNode.point, kdNode.xrange[0], kdNode.xrange[1], kdNode.yrange[0], kdNode.yrange[1]));
+//            System.out.println(String.format("%s -> x:[%s,%s] y:[%s,%s]", kdNode.point, kdNode.xrange[0], kdNode.xrange[1], kdNode.yrange[0], kdNode.yrange[1]));
         };
         forEachKdNode(root, op);
     }
@@ -114,11 +116,100 @@ public class KdTree {
         // using the following pruning rule: if the query rectangle does not intersect the rectangle corresponding to a node,
         // there is no need to explore that node (or its subtrees). A subtree is searched only if it might contain a point contained in the query rectangle.
 
-        return null;
+        final List<Point2D> intersectingPoints = new ArrayList<>();
+        dfsRange(rect, root, intersectingPoints);
+        return intersectingPoints;
+    }
+
+    private void dfsRange(RectHV queryRect, KdNode kdNode, List<Point2D> containedPoints) {
+        // base case -> null. Stop Searching
+        if (kdNode == null) {
+            return;
+        }
+
+        // choices -> kdnode intersects queryRect. add KdNode::point if in queryRect. Keep searching subtree.
+        //         -> does not intersect. stop searching subtree.
+        final double xmin = kdNode.xrange[0];
+        final double xmax = kdNode.xrange[1];
+        final double ymin = kdNode.yrange[0];
+        final double ymax = kdNode.yrange[1];
+        final RectHV nodeRect = new RectHV(xmin, ymin, xmax, ymax);
+        if (nodeRect.intersects(queryRect)) {
+            // kdnode intersects -> add point
+            if (queryRect.contains(kdNode.point)) {
+                // nodeRect might be superset of queryRect.
+                containedPoints.add(kdNode.point);
+            }
+            // add left and right subtree
+            dfsRange(queryRect, kdNode.left, containedPoints);
+            dfsRange(queryRect, kdNode.right, containedPoints);
+        }
+        // kdnode does not intersect. Not searching anymore. Return.
     }
 
     public Point2D nearest(Point2D p) {
-        return null;
+        // do not search subtree (rect), if it is further than closest point found so far
+        // choice -> choose first the subtree on same side of spitting line
+        final KdNode impossibleFarAwayNode = new KdNode(new Point2D(INF * 2.0, INF * 2), null, null);
+        final KdNode closestNode = dfsNearest(p, root, impossibleFarAwayNode);
+        return closestNode.point;
+    }
+
+    private KdNode dfsNearest(final Point2D queryPoint, final KdNode currNode, KdNode closestNode) {
+        // base condition -> if null -> return
+        if (currNode == null) {
+            return null;
+        }
+
+        // process current node - check if new closePoint currNode::point is closer
+        final double currPointToQueryPointDistance = currNode.point.distanceSquaredTo(queryPoint);
+        final double closestPointToQueryPointDistance = closestNode.point.distanceSquaredTo(queryPoint);
+        if (currPointToQueryPointDistance < closestPointToQueryPointDistance) {
+            closestNode = currNode;
+        }
+
+        // choice -> left or right
+        //        -> go subtree on same axis of point -> if exists: search subtree. Do not go other subtree
+        //                                            -> if not exist: search other subtree
+        //        -> update closestPoint if subtree returns closer minPoint
+        final Axis comparisonAxis = currNode.axis;
+        final double nodeComparisonValue = isHorizontalAxis(comparisonAxis) ? currNode.point.y() : currNode.point.x();
+        final double queryComparisonValue = isHorizontalAxis(comparisonAxis) ? queryPoint.y() : queryPoint.x();
+        final boolean isQueryOnLeftSubtree = queryComparisonValue < nodeComparisonValue;
+
+        final KdNode sameSideSubtree = isQueryOnLeftSubtree ? currNode.left : currNode.right;
+        final KdNode otherSideSubtree = isQueryOnLeftSubtree ? currNode.right : currNode.left;
+
+        final KdNode sameSideSubtreeResult = dfsNearest(queryPoint, sameSideSubtree, closestNode);
+        if (sameSideSubtreeResult != null) {
+            if (sameSideSubtreeResult.point.distanceSquaredTo(queryPoint) < closestNode.point.distanceSquaredTo(queryPoint)) {
+                closestNode = sameSideSubtreeResult;
+            }
+        }
+
+        // if the distance from query point to border (aka dividing line) of otherside's subtree,
+        // is further than distance sameside closest point to query point. Don't bother searching.
+        final double distanceToDividingLineSq = currNode.getRect().distanceSquaredTo(queryPoint);
+        final double distanceToClosestPointSq = closestNode.point.distanceSquaredTo(queryPoint);
+        if (distanceToClosestPointSq > distanceToDividingLineSq) {
+            final KdNode otherSideSubtreeResult = dfsNearest(queryPoint, otherSideSubtree, closestNode);
+            if (otherSideSubtreeResult != null &&
+                    otherSideSubtreeResult.point.distanceSquaredTo(queryPoint) < closestNode.point.distanceSquaredTo(queryPoint)) {
+//                log("otherSide", closestNode, otherSideSubtreeResult, queryPoint);
+                closestNode = otherSideSubtreeResult;
+            }
+        }
+
+        return closestNode;
+    }
+
+    private void log(final String id, final KdNode closest, final KdNode updatedClosest, final Point2D queryPoint) {
+        double originalDistance = closest.point.distanceSquaredTo(queryPoint);
+        double newDistance = updatedClosest.point.distanceSquaredTo(queryPoint);
+
+        String printLine = String.format("[%s] closest:(%s) -> (%s). Distance delta: %s",
+                id, closest.point, updatedClosest.point, (originalDistance - newDistance));
+        System.out.println(printLine);
     }
 
     public boolean isEmpty() {
@@ -205,6 +296,11 @@ public class KdTree {
             StdDraw.setPenColor(Color.black);
             StdDraw.point(point.x(), point.y());
             StdDraw.setPenRadius(); //reset to normal
+        }
+
+        public RectHV getRect() {
+            return new RectHV(xrange[0], yrange[0],
+                              xrange[1], yrange[1]);
         }
     }
 
